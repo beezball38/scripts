@@ -18,22 +18,42 @@ if ! command -v nmap &> /dev/null; then
     exit 1
 fi
 
+# Switch to or create htb directory in home
+HTB_DIR="$HOME/htb"
+if [ ! -d "$HTB_DIR" ]; then
+    mkdir -p "$HTB_DIR"
+fi
+cd "$HTB_DIR"
+
 IP_OR_HOSTNAME=$1
 MODULE_NAME=${2:-$(basename "$PWD")}
 OUTPUT_DIR="nmap/$MODULE_NAME"
 PORTS_FILE="$OUTPUT_DIR/open_ports.txt"
+UDP_MODE=false
+
+# Prompt for UDP mode
+read -p "Do you want to enable UDP mode? (y/n): " enable_udp
+if [ "$enable_udp" == "y" ]; then
+    UDP_MODE=true
+fi
+
 mkdir -p "$OUTPUT_DIR"
 
 # Function to run initial nmap scan and find open ports
 run_initial_nmap_scan() {
     MAX_PORTS=0
     BEST_PORTS=""
+    SCAN_TYPE="-p- --min-rate 10000"
+    if [ "$UDP_MODE" == true ]; then
+        SCAN_TYPE="-sU -p- --min-rate 10000"
+    fi
+
     for i in {1..3}; do
         echo "Running initial nmap scan #$i..."
-        nmap -p- --min-rate 10000 "$IP_OR_HOSTNAME" -oG "$OUTPUT_DIR/nmap_results_$i.txt"
+        nmap $SCAN_TYPE "$IP_OR_HOSTNAME" -oG "$OUTPUT_DIR/nmap_results_$i.txt"
 
         # Extract open ports from nmap results
-        PORTS=$(grep -oP '\d+/open/tcp' "$OUTPUT_DIR/nmap_results_$i.txt" | cut -d '/' -f 1 | tr '\n' ',' | sed 's/,$//')
+        PORTS=$(grep -oP '\d+/open' "$OUTPUT_DIR/nmap_results_$i.txt" | cut -d '/' -f 1 | tr '\n' ',' | sed 's/,$//')
         PORT_COUNT=$(echo "$PORTS" | tr ',' '\n' | wc -l)
 
         echo "Scan #$i found $PORT_COUNT open ports: $PORTS"
@@ -69,6 +89,10 @@ fi
 
 # Run detailed nmap scan with the best open ports result
 echo "Running detailed nmap scan..."
-nmap -vv -sC -sV -p "$BEST_PORTS" -oA "$OUTPUT_DIR/detailed_scan" "$IP_OR_HOSTNAME"
+SCAN_TYPE="-vv -sC -sV -p"
+if [ "$UDP_MODE" == true ]; then
+    SCAN_TYPE="-vv -sU -p"
+fi
+nmap $SCAN_TYPE "$BEST_PORTS" -oA "$OUTPUT_DIR/detailed_scan" "$IP_OR_HOSTNAME"
 
 echo "Scan complete. Results are saved in $OUTPUT_DIR."
