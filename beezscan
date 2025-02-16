@@ -1,12 +1,24 @@
 #!/bin/bash
 
-# Check if IP address is provided
+# Check if IP address or hostname is provided
 if [ -z "$1" ]; then
-    echo "Usage: $0 <ip addr> [module name]"
+    echo "Usage: $0 <ip/hostname> [module name]"
     exit 1
 fi
 
-IP=$1
+# Validate IP address or hostname
+if ! [[ "$1" =~ ^[a-zA-Z0-9.-]+$ ]]; then
+    echo "Invalid IP address or hostname."
+    exit 1
+fi
+
+# Check if nmap is installed
+if ! command -v nmap &> /dev/null; then
+    echo "nmap is not installed. Please install it and try again."
+    exit 1
+fi
+
+IP_OR_HOSTNAME=$1
 MODULE_NAME=${2:-$(basename "$PWD")}
 OUTPUT_DIR="nmap/$MODULE_NAME"
 PORTS_FILE="$OUTPUT_DIR/open_ports.txt"
@@ -18,7 +30,7 @@ run_initial_nmap_scan() {
     BEST_PORTS=""
     for i in {1..3}; do
         echo "Running initial nmap scan #$i..."
-        nmap -p- --min-rate 10000 "$IP" -oG "$OUTPUT_DIR/nmap_results_$i.txt"
+        nmap -p- --min-rate 10000 "$IP_OR_HOSTNAME" -oG "$OUTPUT_DIR/nmap_results_$i.txt"
 
         # Extract open ports from nmap results
         PORTS=$(grep -oP '\d+/open/tcp' "$OUTPUT_DIR/nmap_results_$i.txt" | cut -d '/' -f 1 | tr '\n' ',' | sed 's/,$//')
@@ -57,7 +69,6 @@ fi
 
 # Run detailed nmap scan with the best open ports result
 echo "Running detailed nmap scan..."
-nmap -vv -sC -sV -p "$BEST_PORTS" -oA "$OUTPUT_DIR/detailed_scan" "$IP"
+nmap -vv -sC -sV -p "$BEST_PORTS" -oA "$OUTPUT_DIR/detailed_scan" "$IP_OR_HOSTNAME"
 
 echo "Scan complete. Results are saved in $OUTPUT_DIR."
-
