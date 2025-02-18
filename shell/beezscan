@@ -1,0 +1,98 @@
+#!/bin/bash
+
+# Check if IP address or hostname is provided
+if [ -z "$1" ]; then
+    echo "Usage: $0 <ip/hostname> [module name]"
+    exit 1
+fi
+
+# Validate IP address or hostname
+if ! [[ "$1" =~ ^[a-zA-Z0-9.-]+$ ]]; then
+    echo "Invalid IP address or hostname."
+    exit 1
+fi
+
+# Check if nmap is installed
+if ! command -v nmap &> /dev/null; then
+    echo "nmap is not installed. Please install it and try again."
+    exit 1
+fi
+
+# Switch to or create htb directory in home
+HTB_DIR="$HOME/htb"
+if [ ! -d "$HTB_DIR" ]; then
+    mkdir -p "$HTB_DIR"
+fi
+cd "$HTB_DIR"
+
+IP_OR_HOSTNAME=$1
+MODULE_NAME=${2:-$(basename "$PWD")}
+OUTPUT_DIR="nmap/$MODULE_NAME"
+PORTS_FILE="$OUTPUT_DIR/open_ports.txt"
+UDP_MODE=false
+
+# Prompt for UDP mode
+read -p "Do you want to enable UDP mode? (y/n): " enable_udp
+if [ "$enable_udp" == "y" ]; then
+    UDP_MODE=true
+fi
+
+mkdir -p "$OUTPUT_DIR"
+
+# Function to run initial nmap scan and find open ports
+run_initial_nmap_scan() {
+    MAX_PORTS=0
+    BEST_PORTS=""
+    SCAN_TYPE="-p- --min-rate 10000"
+    if [ "$UDP_MODE" == true ]; then
+        SCAN_TYPE="-sU -p- --min-rate 10000"
+    fi
+
+    for i in {1..3}; do
+        echo "Running initial nmap scan #$i..."
+        nmap $SCAN_TYPE "$IP_OR_HOSTNAME" -oG "$OUTPUT_DIR/nmap_results_$i.txt"
+
+        # Extract open ports from nmap results
+        PORTS=$(grep -oP '\d+/open' "$OUTPUT_DIR/nmap_results_$i.txt" | cut -d '/' -f 1 | tr '\n' ',' | sed 's/,$//')
+        PORT_COUNT=$(echo "$PORTS" | tr ',' '\n' | wc -l)
+
+        echo "Scan #$i found $PORT_COUNT open ports: $PORTS"
+
+        if [ "$PORT_COUNT" -gt "$MAX_PORTS" ]; then
+            MAX_PORTS=$PORT_COUNT
+            BEST_PORTS="$PORTS"
+        fi
+    done
+
+    if [ -z "$BEST_PORTS" ]; then
+        echo "No open ports found."
+        exit 1
+    fi
+
+    echo "Best scan found $MAX_PORTS open ports: $BEST_PORTS"
+    echo "$BEST_PORTS" | tr ',' '\n' > "$PORTS_FILE"
+}
+
+# Check if ports file exists and prompt user
+if [ -f "$PORTS_FILE" ]; then
+    read -p "Open ports file exists. Do you want to use the existing ports? (y/n): " use_existing
+    if [ "$use_existing" == "y" ]; then
+        BEST_PORTS=$(cat "$PORTS_FILE" | tr '\n' ',')
+    else
+        run_initial_nmap_scan
+        BEST_PORTS=$(cat "$PORTS_FILE" | tr '\n' ',')
+    fi
+else
+    run_initial_nmap_scan
+    BEST_PORTS=$(cat "$PORTS_FILE" | tr '\n' ',')
+fi
+
+# Run detailed nmap scan with the best open ports result
+echo "Running detailed nmap scan..."
+SCAN_TYPE="-vv -sC -sV -p"
+if [ "$UDP_MODE" == true ]; then
+    SCAN_TYPE="-vv -sU -p"
+fi
+nmap $SCAN_TYPE "$BEST_PORTS" -oA "$OUTPUT_DIR/detailed_scan" "$IP_OR_HOSTNAME"
+
+echo "Scan complete. Results are saved in $OUTPUT_DIR."
