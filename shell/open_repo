@@ -1,0 +1,28 @@
+#!/bin/bash
+
+# Check if both parameters are provided
+if [ $# -ne 2 ]; then
+  echo "Usage: $0 <username> <repo>"
+  exit 1
+fi
+
+USERNAME=$1
+REPO=$2
+
+# Validate username and repo name (only allowing alphanumeric and hyphens)
+if [[ ! "$USERNAME" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+  echo "Invalid username. Only alphanumeric characters, hyphens, and underscores are allowed."
+  exit 1
+fi
+
+if [[ ! "$REPO" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+  echo "Invalid repository name. Only alphanumeric characters, hyphens, and underscores are allowed."
+  exit 1
+fi
+
+# Construct the URL
+URL="https://github.com/$USERNAME/$REPO"
+
+# Open the URL in the default web browser
+open $URL
+
