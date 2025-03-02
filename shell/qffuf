@@ -1,0 +1,61 @@
+#!/bin/bash
+
+# Hardcoded wordlists
+DIR_WORDLIST="/usr/share/seclists/Discovery/Web-Content/common.txt"
+DNS_WORDLIST="/usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt"
+
+# Check if ffuf is installed
+if ! command -v ffuf &> /dev/null; then
+    echo "Error: ffuf is not installed. Please install ffuf and try again."
+    exit 1
+fi
+
+# Help function
+usage() {
+    echo "Usage: $0 <mode> <host>"
+    echo "  mode: 'dir' for directory busting, 'dns' for DNS busting"
+    echo "  host: Target IP address or domain (e.g., 192.168.1.1 or example.com)"
+    exit 1
+}
+
+# Check if mode and host are provided
+if [ $# -ne 2 ]; then
+    echo "Error: Missing arguments."
+    usage
+fi
+
+MODE=$1
+HOST=$2
+
+# Validate mode
+if [ "$MODE" != "dir" ] && [ "$MODE" != "dns" ]; then
+    echo "Error: Invalid mode. Use 'dir' or 'dns'."
+    usage
+fi
+
+# Validate host
+if [ -z "$HOST" ]; then
+    echo "Error: Host is required."
+    usage
+fi
+
+# Prompt for http or https (only for dir mode)
+if [ "$MODE" == "dir" ]; then
+    read -p "Use http or https? (http/https): " PROTOCOL
+    if [ "$PROTOCOL" != "http" ] && [ "$PROTOCOL" != "https" ]; then
+        echo "Error: Invalid protocol. Use 'http' or 'https'."
+        exit 1
+    fi
+    URL="$PROTOCOL://$HOST"
+else
+    URL="$HOST"
+fi
+
+# Run ffuf based on the mode
+if [ "$MODE" == "dir" ]; then
+    echo "Running directory busting on $URL with wordlist $DIR_WORDLIST"
+    ffuf -w $DIR_WORDLIST -u $URL/FUZZ
+elif [ "$MODE" == "dns" ]; then
+    echo "Running DNS busting on $URL with wordlist $DNS_WORDLIST"
+    ffuf -w $DNS_WORDLIST -u $URL -H "Host: FUZZ.$URL"
+fi
