@@ -1,61 +1,135 @@
 #!/bin/bash
 
 # Hardcoded wordlists
-DIR_WORDLIST="/usr/share/seclists/Discovery/Web-Content/common.txt"
-DNS_WORDLIST="/usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt"
+DIR_WORDLIST="/usr/share/seclists/Discovery/Web-Content/common.txt"  # Default directory busting wordlist
+DNS_WORDLIST="/usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt"  # Default DNS busting wordlist
+
+# ------------------------------------------------------------------------------
+# Functions
+# ------------------------------------------------------------------------------
 
 # Check if ffuf is installed
-if ! command -v ffuf &> /dev/null; then
-    echo "Error: ffuf is not installed. Please install ffuf and try again."
-    exit 1
-fi
+check_ffuf_installed() {
+    if ! command -v ffuf &> /dev/null; then
+        echo "Error: ffuf is not installed. Please install ffuf and try again."
+        exit 1
+    fi
+}
 
-# Help function
 usage() {
-    echo "Usage: $0 <mode> <host>"
+    echo "Usage: $0 <mode> <host> [-o output_file]"
     echo "  mode: 'dir' for directory busting, 'dns' for DNS busting"
     echo "  host: Target IP address or domain (e.g., 192.168.1.1 or example.com)"
+    echo "  -o: Save output to a file (optional)"
     exit 1
 }
 
-# Check if mode and host are provided
-if [ $# -ne 2 ]; then
-    echo "Error: Missing arguments."
-    usage
-fi
+# Validate script arguments
+validate_arguments() {
+    # Check if the required arguments (mode and host) are provided
+    if [ $# -lt 2 ]; then
+        echo "Error: Missing arguments."
+        usage
+    fi
 
-MODE=$1
-HOST=$2
+    MODE=$1
+    HOST=$2
 
-# Validate mode
-if [ "$MODE" != "dir" ] && [ "$MODE" != "dns" ]; then
-    echo "Error: Invalid mode. Use 'dir' or 'dns'."
-    usage
-fi
+    if [ "$MODE" != "dir" ] && [ "$MODE" != "dns" ]; then
+        echo "Error: Invalid mode. Use 'dir' or 'dns'."
+        usage
+    fi
 
-# Validate host
-if [ -z "$HOST" ]; then
-    echo "Error: Host is required."
-    usage
-fi
+    if [ -z "$HOST" ]; then
+        echo "Error: Host is required."
+        usage
+    fi
+}
 
-# Prompt for http or https (only for dir mode)
-if [ "$MODE" == "dir" ]; then
+# Prompt the user to choose between http or https
+get_protocol() {
     read -p "Use http or https? (http/https): " PROTOCOL
     if [ "$PROTOCOL" != "http" ] && [ "$PROTOCOL" != "https" ]; then
         echo "Error: Invalid protocol. Use 'http' or 'https'."
         exit 1
     fi
-    URL="$PROTOCOL://$HOST"
-else
-    URL="$HOST"
-fi
+    echo "$PROTOCOL"
+}
 
-# Run ffuf based on the mode
-if [ "$MODE" == "dir" ]; then
-    echo "Running directory busting on $URL with wordlist $DIR_WORDLIST"
-    ffuf -w $DIR_WORDLIST -u $URL/FUZZ
-elif [ "$MODE" == "dns" ]; then
-    echo "Running DNS busting on $URL with wordlist $DNS_WORDLIST"
-    ffuf -w $DNS_WORDLIST -u $URL -H "Host: FUZZ.$URL"
-fi
+# Run directory busting with ffuf
+run_directory_busting() {
+    local url=$1
+    local output_file=$2
+
+    echo "Running directory busting on $url with wordlist $DIR_WORDLIST"
+    if [ -n "$output_file" ]; then
+        # If an output file is provided, save results to the file
+        ffuf -w $DIR_WORDLIST -u $url/FUZZ -o $output_file
+    else
+        # Otherwise, display results in the terminal
+        ffuf -w $DIR_WORDLIST -u $url/FUZZ
+    fi
+}
+
+# Run DNS busting with ffuf
+run_dns_busting() {
+    local host=$1
+    local output_file=$2
+
+    echo "Running DNS busting on $host with wordlist $DNS_WORDLIST"
+    if [ -n "$output_file" ]; then
+        # If an output file is provided, save results to the file
+        ffuf -w $DNS_WORDLIST -u $host -H "Host: FUZZ.$host" -o $output_file
+    else
+        # Otherwise, display results in the terminal
+        ffuf -w $DNS_WORDLIST -u $host -H "Host: FUZZ.$host"
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Main Script Logic
+# ------------------------------------------------------------------------------
+
+main() {
+    # Step 1: Check if ffuf is installed
+    check_ffuf_installed
+
+    # Step 2: Validate script arguments
+    validate_arguments "$@"
+
+    # Step 3: Parse arguments
+    MODE=$1
+    HOST=$2
+    OUTPUT_FILE=""
+
+    # Step 4: Parse optional arguments (e.g., -o for output file)
+    shift 2
+    while getopts ":o:" opt; do
+        case ${opt} in
+            o)
+                OUTPUT_FILE=$OPTARG  # Set the output file if -o is provided
+                ;;
+            *)
+                echo "Error: Invalid option -$OPTARG."
+                usage
+                ;;
+        esac
+    done
+
+    # Step 5: Run the appropriate mode
+    if [ "$MODE" == "dir" ]; then
+        # Directory busting mode
+        PROTOCOL=$(get_protocol)  # Prompt for http or https
+        URL="$PROTOCOL://$HOST"   # Construct the full URL
+        run_directory_busting "$URL" "$OUTPUT_FILE"
+    elif [ "$MODE" == "dns" ]; then
+        # DNS busting mode
+        run_dns_busting "$HOST" "$OUTPUT_FILE"
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Run the Script
+# ------------------------------------------------------------------------------
+
+main "$@"
