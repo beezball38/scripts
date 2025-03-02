@@ -8,17 +8,21 @@ DNS_WORDLIST="/usr/share/seclists/Discovery/DNS/subdomains-top1million-20000.txt
 # Functions
 # ------------------------------------------------------------------------------
 
-# Check if ffuf is installed
-check_ffuf_installed() {
-    if ! command -v ffuf &> /dev/null; then
-        echo "Error: ffuf is not installed. Please install ffuf and try again."
+# Check if ffuf or gobuster is installed
+check_tools_installed() {
+    if command -v ffuf &> /dev/null; then
+        TOOL="ffuf"
+    elif command -v gobuster &> /dev/null; then
+        TOOL="gobuster"
+    else
+        echo "Error: Neither ffuf nor gobuster is installed. Please install one of them and try again."
         exit 1
     fi
 }
 
 usage() {
     echo "Usage: $0 <mode> <host> [-o output_file]"
-    echo "  mode: 'dir' for directory busting, 'dns' for DNS busting"
+    echo "  mode: 'dir' for directory busting, 'vhost' for virtual host busting"
     echo "  host: Target IP address or domain (e.g., 192.168.1.1 or example.com)"
     echo "  -o: Save output to a file (optional)"
     exit 1
@@ -35,8 +39,8 @@ validate_arguments() {
     MODE=$1
     HOST=$2
 
-    if [ "$MODE" != "dir" ] && [ "$MODE" != "dns" ]; then
-        echo "Error: Invalid mode. Use 'dir' or 'dns'."
+    if [ "$MODE" != "dir" ] && [ "$MODE" != "vhost" ]; then
+        echo "Error: Invalid mode. Use 'dir' or 'vhost'."
         usage
     fi
 
@@ -56,33 +60,48 @@ get_protocol() {
     echo "$PROTOCOL"
 }
 
-# Run directory busting with ffuf
+# Run directory busting with ffuf or gobuster
 run_directory_busting() {
     local url=$1
     local output_file=$2
 
     echo "Running directory busting on $url with wordlist $DIR_WORDLIST"
-    if [ -n "$output_file" ]; then
-        # If an output file is provided, save results to the file
-        ffuf -w $DIR_WORDLIST -u $url/FUZZ -o $output_file
+    if [ "$TOOL" == "ffuf" ]; then
+        if [ -n "$output_file" ]; then
+            ffuf -w $DIR_WORDLIST -u $url/FUZZ -o $output_file
+        else
+            ffuf -w $DIR_WORDLIST -u $url/FUZZ
+        fi
     else
-        # Otherwise, display results in the terminal
-        ffuf -w $DIR_WORDLIST -u $url/FUZZ
+        if [ -n "$output_file" ]; then
+            gobuster dir -w $DIR_WORDLIST -u $url -o $output_file
+        else
+            gobuster dir -w $DIR_WORDLIST -u $url
+        fi
     fi
 }
 
-# Run DNS busting with ffuf
-run_dns_busting() {
+# Run virtual host busting with ffuf or gobuster
+run_vhost_busting() {
     local host=$1
     local output_file=$2
 
-    echo "Running DNS busting on $host with wordlist $DNS_WORDLIST"
-    if [ -n "$output_file" ]; then
-        # If an output file is provided, save results to the file
-        ffuf -w $DNS_WORDLIST -u $host -H "Host: FUZZ.$host" -o $output_file
+    # Remove protocol if present
+    host=$(echo $host | sed 's|^[^:]*://||')
+
+    echo "Running virtual host busting on $host with wordlist $DNS_WORDLIST"
+    if [ "$TOOL" == "ffuf" ]; then
+        if [ -n "$output_file" ]; then
+            ffuf -w $DNS_WORDLIST -u $host -H "Host: FUZZ.$host" -o $output_file
+        else
+            ffuf -w $DNS_WORDLIST -u $host -H "Host: FUZZ.$host"
+        fi
     else
-        # Otherwise, display results in the terminal
-        ffuf -w $DNS_WORDLIST -u $host -H "Host: FUZZ.$host"
+        if [ -n "$output_file" ]; then
+            gobuster vhost -w $DNS_WORDLIST -u $host -o $output_file
+        else
+            gobuster vhost -w $DNS_WORDLIST -u $host
+        fi
     fi
 }
 
@@ -91,8 +110,8 @@ run_dns_busting() {
 # ------------------------------------------------------------------------------
 
 main() {
-    # Step 1: Check if ffuf is installed
-    check_ffuf_installed
+    # Step 1: Check if ffuf or gobuster is installed
+    check_tools_installed
 
     # Step 2: Validate script arguments
     validate_arguments "$@"
@@ -122,9 +141,9 @@ main() {
         PROTOCOL=$(get_protocol)  # Prompt for http or https
         URL="$PROTOCOL://$HOST"   # Construct the full URL
         run_directory_busting "$URL" "$OUTPUT_FILE"
-    elif [ "$MODE" == "dns" ]; then
-        # DNS busting mode
-        run_dns_busting "$HOST" "$OUTPUT_FILE"
+    elif [ "$MODE" == "vhost" ]; then
+        # Virtual host busting mode
+        run_vhost_busting "$HOST" "$OUTPUT_FILE"
     fi
 }
 
