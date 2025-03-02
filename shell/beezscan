@@ -33,7 +33,11 @@ prompt_scan_type() {
     echo "Choose scan type:"
     echo "1) TCP"
     echo "2) UDP"
-    read -p "Enter your choice (1/2): " scan_choice
+    read -t 10 -p "Enter your choice (1/2): " scan_choice
+    if [ -z "$scan_choice" ]; then
+        echo "Defaulting to TCP"
+        scan_choice="1"
+    fi
     case $scan_choice in
         1) SCAN_TYPE="TCP";;
         2) SCAN_TYPE="UDP";;
@@ -105,7 +109,11 @@ run_detailed_scan() {
 # Function to prompt for UDP scan if not yet done
 prompt_udp_scan() {
     if [ "$SCAN_TYPE" == "TCP" ]; then
-        read -p "Do you want to perform a UDP scan as well? (y/n): " do_udp_scan
+        read -t 10 -p "Do you want to perform a UDP scan as well? (y/n): " do_udp_scan
+        if [ -z "$do_udp_scan" ]; then
+            echo "No response, skipping scan"
+            do_udp_scan="n"
+        fi
         if [ "$do_udp_scan" == "y" ]; then
             SCAN_TYPE="UDP"
             run_initial_nmap_scan
