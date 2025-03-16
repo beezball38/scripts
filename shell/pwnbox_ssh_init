@@ -1,0 +1,67 @@
+#!/bin/bash
+
+# Path to your SSH config file
+SSH_CONFIG="$HOME/.ssh/config"
+KNOWN_HOSTS="$HOME/.ssh/known_hosts"
+ALIAS_NAME="htb"
+
+# Function to check if the SSH config file exists
+check_ssh_config_exists() {
+  if [[ ! -f "$SSH_CONFIG" ]]; then
+    echo "SSH config file not found at $SSH_CONFIG. Please create it first."
+    exit 1
+  fi
+}
+
+# Function to check if the alias exists in the SSH config file
+check_alias_exists() {
+  if ! grep -q "Host $ALIAS_NAME" "$SSH_CONFIG"; then
+    echo "Alias '$ALIAS_NAME' not found in $SSH_CONFIG. Please add it manually first."
+    exit 1
+  fi
+}
+
+# Function to prompt the user for the new SSH address
+prompt_new_ssh_address() {
+  read -p "Enter the new SSH address for your HackTheBox lab system: " NEW_SSH_ADDRESS
+}
+
+# Function to update the existing alias with the new SSH address
+update_ssh_address() {
+  sed -i.bak "/Host $ALIAS_NAME/,/HostName/ s/HostName .*/HostName $NEW_SSH_ADDRESS/" "$SSH_CONFIG"
+}
+
+# Function to remove old hosts starting with "htb-" from known_hosts
+remove_old_hosts() {
+  if [[ -f "$KNOWN_HOSTS" ]]; then
+    sed -i.bak '/^htb-/d' "$KNOWN_HOSTS"
+  fi
+}
+
+# Function to add the new host to known_hosts
+add_new_host() {
+  ssh-keyscan -H "$NEW_SSH_ADDRESS" >> "$KNOWN_HOSTS"
+}
+
+# Function to check if the update was successful
+check_update_success() {
+  if grep -q "HostName $NEW_SSH_ADDRESS" "$SSH_CONFIG"; then
+    echo "Successfully updated SSH address for alias '$ALIAS_NAME' to '$NEW_SSH_ADDRESS'."
+  else
+    echo "Failed to update SSH address. Please check your SSH config file."
+  fi
+}
+
+# Main function to execute the script
+main() {
+  check_ssh_config_exists
+  check_alias_exists
+  prompt_new_ssh_address
+  update_ssh_address
+  remove_old_hosts
+  add_new_host
+  check_update_success
+}
+
+# Execute the main function
+main
