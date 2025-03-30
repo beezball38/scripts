@@ -1,5 +1,6 @@
 #!/bin/bash
 
+SSH_CONFIG="$HOME/.ssh/config"
 KNOWN_HOSTS="$HOME/.ssh/known_hosts"
 ALIAS_NAME="htb"
 
@@ -53,5 +54,4 @@ main() {
   check_update_success
 }
 
-# Execute the main function
 main
