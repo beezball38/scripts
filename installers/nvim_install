@@ -1,81 +1,32 @@
 #!/bin/bash
 
-# Function to prepare the environment
-prepare_environment() {
-    echo "Preparing environment..."
-    mkdir -p "$HOME/nvim-deps"
-    mkdir -p "$HOME/nvim-build"
-    mkdir -p "$HOME/.local/bin"
-    mkdir -p "$HOME/.local/lib"
-    mkdir -p "$HOME/.local/include"
-}
+# Change the working directory to the user's home directory
+if [ "$PWD" != "$HOME" ]; then
+  echo "Warning: You are not in the home directory!"
+  echo "Switching to $HOME..."
+    cd "$HOME" || { echo "Failed to change directory to home"; exit 1; }
+fi
+  
+# Update package lists
+sudo apt update
 
-# Function to install dependencies locally
-install_dependencies() {
-    echo "Installing dependencies locally..."
-    
-    # Install CMake
-    if ! command -v cmake &> /dev/null; then
-        echo "CMake not found. Installing locally..."
-        cd "$HOME/nvim-deps" || exit
-        curl -LO https://github.com/Kitware/CMake/releases/download/v3.27.2/cmake-3.27.2.tar.gz
-        tar -xzf cmake-3.27.2.tar.gz
-        cd cmake-3.27.2 || exit
-        ./bootstrap --prefix="$HOME/.local"
-        make -j"$(nproc)" && make install
-        PATH="$HOME/.local/bin:$PATH"
-    fi
+# Install minimal dependencies
+sudo apt install -y cmake make gcc libtool libtool-bin autoconf automake pkg-config gettext curl unzip
 
-    # Install Ninja
-    if ! command -v ninja &> /dev/null; then
-        echo "Ninja not found. Installing locally..."
-        cd "$HOME/nvim-deps" || exit
-        curl -LO https://github.com/ninja-build/ninja/releases/download/v1.11.1/ninja-linux.zip
-        unzip ninja-linux.zip -d "$HOME/.local/bin"
-        chmod +x "$HOME/.local/bin/ninja"
-    fi
-}
+# Install required libraries for Neovim
+sudo apt install -y libuv1-dev libmsgpack-dev libluajit-5.1-dev libvterm-dev libunibilium-dev
 
-# Function to clone the Neovim repository
-clone_repository() {
-    echo "Cloning Neovim repository..."
-    if [ -d "$HOME/nvim-build" ]; then
-        echo "Repository already exists. Pulling latest changes..."
-        cd "$HOME/nvim-build" && git pull
-    else
-        git clone https://github.com/neovim/neovim.git "$HOME/nvim-build"
-    fi
-}
+# Clone the Neovim repository
+git clone https://github.com/neovim/neovim.git
 
-# Function to build and install Neovim
-build_and_install() {
-    echo "Building and installing Neovim..."
-    cd "$HOME/nvim-build" || exit
-    make CMAKE_BUILD_TYPE=Release CMAKE_INSTALL_PREFIX="$HOME/.local" || {
-        echo "Error during build process."
-        exit 1
-    }
-    make install
-}
+# Navigate to the Neovim directory
+cd neovim
 
-# Function to clean up all intermediate files and directories
-cleanup() {
-    echo "Cleaning up intermediate files..."
-    rm -rf "$HOME/nvim-deps"
-    rm -rf "$HOME/nvim-build"
-}
+# Build Neovim using CMake
+make CMAKE_BUILD_TYPE=RelWithDebInfo
 
-# Main method to orchestrate the workflow
-main() {
-    prepare_environment
-    install_dependencies
-    clone_repository
-    build_and_install
-    cleanup
-    echo "Installation complete. Neovim has been installed in $HOME/.local/bin."
-    echo "Ensure that $HOME/.local/bin is in your PATH."
-}
+# Install Neovim (requires sudo privileges)
+sudo make install
 
-# Execute the main method
-main
+echo "Neovim has been successfully built and installed!"
 
