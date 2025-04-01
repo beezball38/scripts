@@ -1,0 +1,101 @@
+#!/bin/bash
+
+validate_input() {
+    if [ "$#" -lt 1 ]; then
+        echo "Usage: $0 <IP_ADDRESS> [HOSTNAME1] [HOSTNAME2] ..."
+        exit 1
+    fi
+}
+
+check_sudo() {
+    if [ "$EUID" -ne 0 ]; then
+        echo "Please run as root"
+        exit 1
+    fi
+}
+
+set_ip_address() {
+    IP_ADDRESS=$1
+    shift
+}
+
+initialize_hostnames() {
+    HOSTNAMES=("$@")
+}
+
+list_existing_entries() {
+    grep -E "^([0-9]{1,3}\.){3}[0-9]{1,3} " /etc/hosts
+}
+
+select_ip_address() {
+    local entries
+    entries=$(list_existing_entries)
+    echo "$entries"
+    
+    read -p "Enter the number of the IP address you want to select: " index
+    IP_ADDRESS=$(echo "$entries" | sed -n "${index}p" | awk '{print $1}')
+    HOSTNAMES=($(echo "$entries" | sed -n "${index}p" | awk '{for(i=2;i<=NF;i++)print $i}'))
+}
+
+add_hostnames() {
+    while true; do
+        read -p "Any more hostnames to add? (enter 'n' to stop): " hostname
+        if [ "$hostname" == "n" ]; then
+            break
+        fi
+        HOSTNAMES+=("$hostname")
+    done
+}
+
+edit_hostnames() {
+    while true; do
+        echo "Current hostnames: ${HOSTNAMES[*]}"
+        read -p "Add or remove a hostname (enter 'done' to finish): " action
+        if [ "$action" == "done" ]; then
+            break
+        elif [[ " ${HOSTNAMES[@]} " =~ " ${action} " ]]; then
+            HOSTNAMES=("${HOSTNAMES[@]/$action}")
+        else
+            HOSTNAMES+=("$action")
+        fi
+    done
+}
+
+append_to_hosts() {
+    echo "$IP_ADDRESS ${HOSTNAMES[*]}" | sudo tee -a /etc/hosts
+    echo "Hostnames added to /etc/hosts"
+}
+
+edit_host_entry() {
+    sudo sed -i "/^$IP_ADDRESS /d" /etc/hosts
+    append_to_hosts
+}
+
+main() {
+    check_sudo
+
+    while true; do
+        read -p "Do you want to add a new host entry? (y/n): " add_choice
+        if [ "$add_choice" == "y" ]; then
+            validate_input "$@"
+            set_ip_address "$@"
+            initialize_hostnames "$@"
+            add_hostnames
+            append_to_hosts
+        fi
+
+        read -p "Do you want to edit an existing host entry? (y/n): " edit_choice
+        if [ "$edit_choice" == "y" ]; then
+            select_ip_address
+            edit_hostnames
+            edit_host_entry
+        fi
+
+        read -p "Do you want to exit? (enter 'e' to exit or any other key to continue): " exit_choice
+        if [ "$exit_choice" == "e" ]; then
+            break
+        fi
+    done
+}
+
+main "$@"
