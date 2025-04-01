@@ -2,10 +2,10 @@ require 'winrm'
 require 'readline'
 
 conn = WinRM::Connection.new(
-    endpoint: 'http://giddy.htb:5985/wsman',
+  endpoint: 'http://example.com/5985/wsman', #replace with endpoint
   transport: :plaintext,
-  user: 'stacy',
-  password: 'xNnWo6272k7x',
+  user: 'user', #replace with user
+  password: 'password', #replace with passwork
   :no_ssl_peer_verification => true
 )
 
